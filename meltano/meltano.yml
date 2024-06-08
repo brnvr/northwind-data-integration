@@ -1,0 +1,37 @@
+version: 1
+default_environment: dev
+project_id: 6227d599-2581-4f8f-8174-567c63a192e8
+environments:
+- name: dev
+- name: staging
+- name: prod
+plugins:
+  extractors:
+  - name: tap-postgres
+    variant: meltanolabs
+    pip_url: git+https://github.com/MeltanoLabs/tap-postgres.git
+    config:
+      host: host.docker.internal
+      port: 5432
+      user: northwind_user
+      database: northwind
+    select:
+    - public-us_states.*
+  loaders:
+  - name: target-csv
+    variant: hotgluexyz
+    pip_url: git+https://github.com/hotgluexyz/target-csv.git
+  utilities:
+  - name: airflow
+    variant: apache
+    pip_url: git+https://github.com/meltano/airflow-ext.git@main apache-airflow==2.8.1
+      --constraint 
+      https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-no-providers-${MELTANO__PYTHON_VERSION}.txt
+jobs:
+- name: input-to-disk
+  tasks:
+  - tap-postgres target-csv
+schedules:
+- name: input-to-disk-daily
+  interval: '* * * * *'
+  job: input-to-disk

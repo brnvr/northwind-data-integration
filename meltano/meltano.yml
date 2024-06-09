@@ -19,8 +19,11 @@ plugins:
     - public-us_states.*
   loaders:
   - name: target-csv
-    variant: hotgluexyz
-    pip_url: git+https://github.com/hotgluexyz/target-csv.git
+    variant: meltanolabs
+    pip_url: git+https://github.com/brnvr/target-csv.git
+    config:
+      destination_path: 'output/{stream_name}/{datestamp}'
+      file_naming_scheme: 'data.csv'
   orchestrators:
   - name: airflow
     variant: apache

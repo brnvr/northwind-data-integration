@@ -10,6 +10,8 @@ plugins:
   - name: tap-postgres
     variant: meltanolabs
     pip_url: git+https://github.com/MeltanoLabs/tap-postgres.git
+  - name: tap-postgres-source
+    inherit_from: tap-postgres
     config:
       host: host.docker.internal
       port: 5432
@@ -21,10 +23,19 @@ plugins:
     - '*.*'
     - '!public-products.unit_price'
     - '!public-orders.freight'
+  - name: tap-postgres-destination
+    inherit_from: tap-postgres
+    config:
+      database: data_destination
+      host: host.docker.internal
+      port: 5433
+      user: admin
+      filter_schemas:
+      - analysis
   - name: tap-csv
     variant: meltanolabs
     pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
-  - name: tap-csv-to-disk
+  - name: tap-csv-source
     inherit_from: tap-csv
     config:
       files:
@@ -33,7 +44,7 @@ plugins:
         keys: []
     select:
     - order_details.*
-  - name: tap-csv-to-db
+  - name: tap-csv-local-disk
     inherit_from: tap-csv
     config:
       csv_files_definition: data/.temp/files_definition.json
@@ -45,11 +56,11 @@ plugins:
     pip_url: git+https://github.com/MeltanoLabs/target-csv.git
     config:
       file_naming_scheme: '{stream_name}.csv'
-  - name: target-csv-from-csv
+  - name: target-csv-local-disk-from-csv
     inherit_from: target-csv
     config:
       destination_path: data/.temp/csv
-  - name: target-csv-from-postgres
+  - name: target-csv-local-disk-from-postgres
     inherit_from: target-csv
     config:
       destination_path: data/.temp/postgres
@@ -62,6 +73,12 @@ plugins:
       port: 5433
       user: admin
       default_target_schema: raw
+  - name: target-jsonl
+    variant: andyh1203
+    pip_url: target-jsonl
+    config:
+      destination_path: data/result
+      do_timestamp_file: true
   orchestrators:
   - name: airflow
     variant: apache
@@ -97,19 +114,21 @@ plugins:
       user: admin
       skip_pre_invoke: true
 jobs:
-- name: input-to-disk
+- name: input-to-local-disk
   tasks:
-  - tap-postgres target-csv-from-postgres
-  - tap-csv-to-disk target-csv-from-csv
+  - tap-postgres-source target-csv-local-disk-from-postgres
+  - tap-csv-source target-csv-local-disk-from-csv
   - data_process:organize_csv_files
-- name: disk-to-db
+- name: local-disk-to-destination
   tasks:
   - data_process:generate_files_definition
-  - tap-csv-to-db target-postgres
+  - tap-csv-local-disk target-postgres
+  - dbt-postgres:run
+  - tap-postgres-destination target-jsonl
 schedules:
-- name: input-to-disk-daily
+- name: input-to-local-disk-daily
   interval: '* * * * *'
-  job: input-to-disk
-- name: disk-to-db-daily
+  job: input-to-local-disk
+- name: local-disk-to-destination-daily
   interval: '* * * * *'
-  job: disk-to-db
+  job: local-disk-to-destination

@@ -17,13 +17,44 @@ plugins:
       database: northwind
     select:
     - public-us_states.*
+  - name: tap-csv
+    variant: meltanolabs
+    pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
+  - name: tap-csv-to-disk
+    inherit_from: tap-csv
+    config:
+      csv_files_definition: config/csv_files_definitions/tap-csv-to-disk.json
+    select:
+    - order_details.*
+  - name: tap-csv-to-db
+    inherit_from: tap-csv
+    config:
+      csv_files_definition: data/output/.temp/files_definition.json
+    select:
+    - order_details.*
+    - public-us_states.*
   loaders:
   - name: target-csv
     variant: meltanolabs
-    pip_url: git+https://github.com/brnvr/target-csv.git
+    pip_url: git+https://github.com/MeltanoLabs/target-csv.git
     config:
-      destination_path: 'output/{stream_name}/{datestamp}'
-      file_naming_scheme: 'data.csv'
+      file_naming_scheme: '{stream_name}.csv'
+  - name: target-csv-from-csv
+    inherit_from: target-csv
+    config:
+      destination_path: data/output/.temp/csv
+  - name: target-csv-from-postgres
+    inherit_from: target-csv
+    config:
+      destination_path: data/output/.temp/postgres
+  - name: target-postgres
+    variant: meltanolabs
+    pip_url: meltanolabs-target-postgres
+    config:
+      database: data_destination
+      host: host.docker.internal
+      port: 5433
+      user: admin
   orchestrators:
   - name: airflow
     variant: apache
@@ -39,11 +70,29 @@ plugins:
     pip_url: git+https://github.com/meltano/airflow-ext.git@main apache-airflow==2.8.1
       --constraint 
       https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-no-providers-${MELTANO__PYTHON_VERSION}.txt
+  - name: data_process
+    namespace: data_process
+    commands:
+      organize_csv_files:
+        args: py/organize_csv_files.py data/output
+        executable: python
+      generate_files_definition:
+        args: py/generate_files_definition.py data/output
+        executable: python
 jobs:
 - name: input-to-disk
   tasks:
-  - tap-postgres target-csv
+  - tap-postgres target-csv-from-postgres
+  - tap-csv-to-disk target-csv-from-csv
+  - data_process:organize_csv_files
+- name: disk-to-db
+  tasks:
+  - data_process:generate_files_definition
+  - tap-csv-to-db target-postgres
 schedules:
 - name: input-to-disk-daily
   interval: '* * * * *'
   job: input-to-disk
+- name: disk-to-db-daily
+  interval: '* * * * *'
+  job: disk-to-db

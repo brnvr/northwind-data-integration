@@ -1,0 +1,7 @@
+[
+  {
+    "entity": "order_details",
+    "path": "data/output/csv",
+    "keys": []
+  }
+]

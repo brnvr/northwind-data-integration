@@ -15,24 +15,30 @@ plugins:
       port: 5432
       user: northwind_user
       database: northwind
+      filter_schemas:
+      - public
     select:
-    - public-us_states.*
+    - '*.*'
+    - '!public-products.unit_price'
+    - '!public-orders.freight'
   - name: tap-csv
     variant: meltanolabs
     pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
   - name: tap-csv-to-disk
     inherit_from: tap-csv
     config:
-      csv_files_definition: config/csv_files_definitions/tap-csv-to-disk.json
+      files:
+      - entity: order_details
+        path: input
+        keys: []
     select:
     - order_details.*
   - name: tap-csv-to-db
     inherit_from: tap-csv
     config:
-      csv_files_definition: data/output/.temp/files_definition.json
+      csv_files_definition: data/.temp/files_definition.json
     select:
-    - order_details.*
-    - public-us_states.*
+    - '*.*'
   loaders:
   - name: target-csv
     variant: meltanolabs
@@ -42,11 +48,11 @@ plugins:
   - name: target-csv-from-csv
     inherit_from: target-csv
     config:
-      destination_path: data/output/.temp/csv
+      destination_path: data/.temp/csv
   - name: target-csv-from-postgres
     inherit_from: target-csv
     config:
-      destination_path: data/output/.temp/postgres
+      destination_path: data/.temp/postgres
   - name: target-postgres
     variant: meltanolabs
     pip_url: meltanolabs-target-postgres
@@ -55,6 +61,7 @@ plugins:
       host: host.docker.internal
       port: 5433
       user: admin
+      default_target_schema: raw
   orchestrators:
   - name: airflow
     variant: apache
@@ -74,11 +81,21 @@ plugins:
     namespace: data_process
     commands:
       organize_csv_files:
-        args: py/organize_csv_files.py data/output
+        args: py/organize_csv_files.py data
         executable: python
       generate_files_definition:
-        args: py/generate_files_definition.py data/output
+        args: py/generate_files_definition.py data
         executable: python
+  - name: dbt-postgres
+    variant: dbt-labs
+    pip_url: dbt-core dbt-postgres<1.8 git+https://github.com/meltano/dbt-ext.git@main
+    config:
+      dbname: data_destination
+      host: host.docker.internal
+      port: 5433
+      schema: analysis
+      user: admin
+      skip_pre_invoke: true
 jobs:
 - name: input-to-disk
   tasks:

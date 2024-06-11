@@ -58,8 +58,12 @@ def organize_csv_files(data_dir, date=None):
       if not os.path.exists(csv_dir):
         os.makedirs(csv_dir)
 
-      # Move o CSV para o diretório
+      # Move o CSV para o diretório e renomeia com timestamp
       source_file = os.path.join(inner_temp_dir, filename)
+      current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+      filename = f"{current_timestamp}_{filename}"
+
       os.rename(source_file, os.path.join(csv_dir, filename))
       csv_map[entity] = { date: csv_dir.replace("\\", "/") }
 
@@ -73,6 +77,9 @@ if __name__ == "__main__":
     exit(1)
 
   data_dir = sys.argv[1]
-  date = sys.argv[2] if len(sys.argv) > 3 else None
+  date = sys.argv[2] if len(sys.argv) > 2 else None
+
+  if date == "TODAY":
+    date = None
 
   organize_csv_files(data_dir, date)

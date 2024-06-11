@@ -64,6 +64,9 @@ if __name__ == "__main__":
     exit(1)
 
   data_dir = sys.argv[1]
-  date = sys.argv[2] if len(sys.argv) > 3 else None
+  date = sys.argv[2] if len(sys.argv) > 2 else None
+
+  if date == "TODAY":
+    date = None
 
   generate_files_definition(data_dir, date)

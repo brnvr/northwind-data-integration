@@ -1,4 +1,4 @@
-SELECT
+SELECT DISTINCT
 	ord.order_id,
 	ord.customer_id,
 	ord.employee_id,

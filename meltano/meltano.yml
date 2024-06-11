@@ -23,6 +23,40 @@ plugins:
     - '*.*'
     - '!public-products.unit_price'
     - '!public-orders.freight'
+    metadata:
+      'public-us_states':
+        replication-method: INCREMENTAL
+        replication-key: state_id
+      'public-territories':
+        replication-method: INCREMENTAL
+        replication-key: territory_id
+      'public-customers':
+        replication-method: INCREMENTAL
+        replication-key: customer_id
+      'public-categories':
+        replication-method: INCREMENTAL
+        replication-key: category_id
+      'public-employee_territories':
+        replication-method: INCREMENTAL
+        replication-key: employee_id
+      'public-employees':
+        replication-method: INCREMENTAL
+        replication-key: employee_id
+      'public-orders':
+        replication-method: INCREMENTAL
+        replication-key: order_id
+      'public-products':
+        replication-method: INCREMENTAL
+        replication-key: product_id
+      'public-region':
+        replication-method: INCREMENTAL
+        replication-key: region_id
+      'public-shippers':
+        replication-method: INCREMENTAL
+        replication-key: shipper_id
+      'public-suppliers':
+        replication-method: INCREMENTAL
+        replication-key: supplier_id
   - name: tap-postgres-destination
     inherit_from: tap-postgres
     config:
@@ -44,6 +78,10 @@ plugins:
         keys: []
     select:
     - order_details.*
+    metadata:
+      'order_details':
+        replication-method: INCREMENTAL
+        replication-key: order_id
   - name: tap-csv-local-disk
     inherit_from: tap-csv
     config:
@@ -64,6 +102,10 @@ plugins:
     inherit_from: target-csv
     config:
       destination_path: data/.temp/postgres
+  - name: target-csv-results
+    inherit_from: target-csv
+    config:
+      destination_path: data/result
   - name: target-postgres
     variant: meltanolabs
     pip_url: meltanolabs-target-postgres
@@ -78,7 +120,6 @@ plugins:
     pip_url: target-jsonl
     config:
       destination_path: data/result
-      do_timestamp_file: true
   orchestrators:
   - name: airflow
     variant: apache
@@ -94,14 +135,14 @@ plugins:
     pip_url: git+https://github.com/meltano/airflow-ext.git@main apache-airflow==2.8.1
       --constraint 
       https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-no-providers-${MELTANO__PYTHON_VERSION}.txt
-  - name: data_process
-    namespace: data_process
+  - name: data-process
+    namespace: data-process
     commands:
       organize_csv_files:
-        args: py/organize_csv_files.py data
+        args: py/organize_csv_files.py data ${DATE}
         executable: python
       generate_files_definition:
-        args: py/generate_files_definition.py data
+        args: py/generate_files_definition.py data ${DATE}
         executable: python
   - name: dbt-postgres
     variant: dbt-labs
@@ -118,17 +159,23 @@ jobs:
   tasks:
   - tap-postgres-source target-csv-local-disk-from-postgres
   - tap-csv-source target-csv-local-disk-from-csv
-  - data_process:organize_csv_files
+  - data-process:organize_csv_files 
 - name: local-disk-to-destination
   tasks:
-  - data_process:generate_files_definition
+  - data-process:generate_files_definition
   - tap-csv-local-disk target-postgres
   - dbt-postgres:run
-  - tap-postgres-destination target-jsonl
+  - tap-postgres-destination target-csv-results
+- name: full-pipeline
+  tasks:
+  - tap-postgres-source target-csv-local-disk-from-postgres
+  - tap-csv-source target-csv-local-disk-from-csv
+  - data-process:organize_csv_files
+  - data-process:generate_files_definition
+  - tap-csv-local-disk target-postgres
+  - dbt-postgres:run
+  - tap-postgres-destination target-csv-results
 schedules:
-- name: input-to-local-disk-daily
-  interval: '* * * * *'
-  job: input-to-local-disk
-- name: local-disk-to-destination-daily
-  interval: '* * * * *'
-  job: local-disk-to-destination
+- name: full-pipeline-daily
+  interval: '@daily'
+  job: full-pipeline

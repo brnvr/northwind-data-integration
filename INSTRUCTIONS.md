@@ -30,7 +30,7 @@ docker run -v "$(pwd)":/project northwind run input-to-local-disk
 
 Os dados são inicialmente carregados no diretório ``/data/.temp``, e então um script é executado para movê-los para os diretórios com o padrão requisitado ``/{table}/{date}/{file}.csv``. É também gerado um dicionário ``csv_map.json`` que mapeia o nome e data de cada entidade para a pasta contendo os dados extraídos. 
 
-### local_disk_to_destination
+### local-disk-to-destination
 Extrai os dados contidos nos subdiretórios de ``/data`` e os carrega no banco Postgres destino. Ela utiliza o ``csv_map.json`` gerado no processo anterior para mapear as entidades a serem extraídas
 
 ```sh
